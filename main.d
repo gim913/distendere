@@ -1,5 +1,6 @@
 import compress.Aplib;
 import compress.Lzss;
+import compress.BriefLz;
 
 import tango.io.Stdout;
 import tango.io.device.File;
@@ -18,7 +19,7 @@ int main(char[][] args)
     foreach (ref Logger l; Log.hierarchy) {
         l.level = Log.root.Warn;
     }
-    //Log.lookup("compress.Lzss").level = Log.root.Trace;
+    //Log.lookup("compress.BriefLz").level = Log.root.Trace;
 
     auto inFile = new FileMap(args[2], File.ReadExisting);
     auto file = new File(args[3], File.ReadWriteCreate);
@@ -30,8 +31,13 @@ int main(char[][] args)
     aplib.decompressStream(inFile, file);
     +/
 
+    /+
     auto lzss = new Lzss!();
     lzss.decompressStream(inFile, file);
+    +/
+
+    auto briefLz = new BriefLz;
+    briefLz.decompressStream(inFile, file);
 
     return 0;
 }

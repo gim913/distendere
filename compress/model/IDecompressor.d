@@ -4,5 +4,5 @@ private import tango.io.model.IConduit;
 
 interface IDecompressor
 {
-        void decompressStream(InputStream inStream, IConduit outStream);
+        void decompressStream(InputStream inStream, IConduit outStream, int unpackedLength = -1);
 }

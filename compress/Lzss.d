@@ -1,8 +1,9 @@
 module compress.Lzss;
 
-import compress.model.IDecompressor;
+private import compress.model.IDecompressor;
 
 private import tango.io.model.IConduit;
+private import tango.core.Exception;
 private import tango.io.stream.Data;
 private import tango.util.log.Log;
 
@@ -27,7 +28,8 @@ class Lzss(size_t Offset_Bits = 12, size_t Length_Bits = 4) : IDecompressor
             slidingWindow[] = fillWindow;
             log.trace(" off: {} len: {}", Offset_Bits, Length_Bits);
         }
-        void decompressStream(InputStream inStream, IConduit outStream) {
+
+        void decompressStream(InputStream inStream, IConduit outStream, int unpSize = -1) {
             if (log.enabled(log.Trace)) { 
                 log.trace("in decompress()");
             }
@@ -36,7 +38,7 @@ class Lzss(size_t Offset_Bits = 12, size_t Length_Bits = 4) : IDecompressor
             auto outDataIn = new DataInput(outStream);
             auto outDataOut = new DataOutput(outStream);
             size_t bitCount; // 0
-            uint state; // 0
+            uint state; // for keeping bits, 0
 
             uint getBit() {
                 if (! bitCount-- ) {
@@ -171,7 +173,11 @@ class Lzss(size_t Offset_Bits = 12, size_t Length_Bits = 4) : IDecompressor
                     }
                 }
 
-            } catch {
+            } catch (IOException o) {
+                // silently eat that exceptions
+                if ("DataInput :: unexpected eof while reading" != o.msg) {
+                    throw o;
+                }
             }
 
             outDataOut.flush;

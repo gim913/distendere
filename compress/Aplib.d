@@ -1,6 +1,6 @@
 module compress.Aplib;
 
-import compress.model.IDecompressor;
+private import compress.model.IDecompressor;
 
 private import tango.io.model.IConduit;
 private import tango.io.stream.Data;
@@ -21,7 +21,8 @@ class Aplib(int State_Bit_Count) : IDecompressor
     public:
         this() {
         }
-        void decompressStream(InputStream inStream, IConduit outStream) {
+
+        void decompressStream(InputStream inStream, IConduit outStream, int unpSize = -1) {
             if (log.enabled(log.Trace)) { 
                 log.trace("in decompress()");
             }
