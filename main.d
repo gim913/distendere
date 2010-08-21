@@ -1,6 +1,7 @@
-import compress.Aplib;
-import compress.Lzss;
-import compress.BriefLz;
+//import compress.Aplib;
+//import compress.Lzss;
+//import compress.BriefLz;
+import compress.QuickLz;
 
 import tango.io.Stdout;
 import tango.io.device.File;
@@ -19,7 +20,7 @@ int main(char[][] args)
     foreach (ref Logger l; Log.hierarchy) {
         l.level = Log.root.Warn;
     }
-    //Log.lookup("compress.BriefLz").level = Log.root.Trace;
+    Log.lookup("compress.QuickLz").level = Log.root.Trace;
 
     auto inFile = new FileMap(args[2], File.ReadExisting);
     auto file = new File(args[3], File.ReadWriteCreate);
@@ -36,8 +37,14 @@ int main(char[][] args)
     lzss.decompressStream(inFile, file);
     +/
 
+    /+
     auto briefLz = new BriefLz;
     briefLz.decompressStream(inFile, file);
+    +/
+
+    auto qlz = new QuickLz!(3);
+
+    qlz.decompressStream(inFile, file);
 
     return 0;
 }
