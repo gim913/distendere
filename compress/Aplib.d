@@ -17,7 +17,6 @@ static this()
 
 class Aplib(int State_Bit_Count) : IDecompressor
 {
-    private:
     public:
         this() {
         }

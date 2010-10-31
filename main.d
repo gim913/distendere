@@ -20,7 +20,7 @@ int main(char[][] args)
     foreach (ref Logger l; Log.hierarchy) {
         l.level = Log.root.Warn;
     }
-    Log.lookup("compress.QuickLz").level = Log.root.Trace;
+    //Log.lookup("compress.QuickLz").level = Log.root.Trace;
 
     auto inFile = new FileMap(args[2], File.ReadExisting);
     auto file = new File(args[3], File.ReadWriteCreate);
@@ -42,9 +42,11 @@ int main(char[][] args)
     briefLz.decompressStream(inFile, file);
     +/
 
-    auto qlz = new QuickLz!(3);
+    auto qlz = new QuickLz!(1);
 
-    qlz.decompressStream(inFile, file);
+    uint r = 0x7800;
+    Stdout.formatln ("{:x}", r).newline;
+    qlz.decompressStream(inFile, file, r);
 
     return 0;
 }
