@@ -32,7 +32,7 @@ class QuickLz(int Compression_Level) : IDecompressor
         auto outDataOut = new DataOutput(outStream);
         size_t bitCount; // 0
         uint state; // 0
-        static if (Compression_Level < 3) {
+        static if (Compression_Level == 1 || Compression_Level == 2) {
             hashCounter[] = 0; // reset hash state
         }
 
@@ -45,54 +45,55 @@ class QuickLz(int Compression_Level) : IDecompressor
             }
         }
 
-        uint hashFunc(uint i) {
-            static if (Compression_Level == 1) {
-                return ((i >> 12) ^ i) & (Hash_Values - 1);
+        static if (Compression_Level == 1 || Compression_Level == 2) {
+            uint hashFunc(uint i) {
+                static if (Compression_Level == 1) {
+                    return ((i >> 12) ^ i) & (Hash_Values - 1);
 
-            } else {
-                return (((i >> 9) ^ (i >> 13) ^ i) & (Hash_Values - 1));
+                } else if (Compression_Level == 2) {
+                    return (((i >> 9) ^ (i >> 13) ^ i) & (Hash_Values - 1));
+                }
             }
-        }
 
-        size_t lastHashed;
-        void updateHash(int i) {
-            static if (Compression_Level == 1) {
-                ubyte temp[4];
-                outDataIn.seek(i);
-                outDataIn.read(temp[0 .. 3]);
-                uint fetch = *cast(uint*)temp.ptr;
-                uint h = hashFunc(fetch);
-                hashTable[h].offset[0] = i;
-                if (log.enabled(log.Trace)) log.trace("output: h[{:x8}] = {:x8}", h, i);
-                hashCounter[h] = 1;
+            size_t lastHashed;
+            void updateHash(int i) {
+                static if (Compression_Level == 1) {
+                    ubyte temp[4];
+                    outDataIn.seek(i);
+                    outDataIn.read(temp[0 .. 3]);
+                    uint fetch = *cast(uint*)temp.ptr;
+                    uint h = hashFunc(fetch);
+                    hashTable[h].offset[0] = i;
+                    if (log.enabled(log.Trace)) log.trace("output: h[{:x8}] = {:x8}", h, i);
+                    hashCounter[h] = 1;
 
-                if (log.enabled(log.Trace)) log.trace("fetchinup: {:x8}", fetch);
+                    if (log.enabled(log.Trace)) log.trace("fetchinup: {:x8}", fetch);
 
-            } else {
-                ubyte temp[4];
-                outDataIn.seek(i);
-                outDataIn.read(temp[0 .. 3]);
-                uint fetch = *cast(uint*)temp.ptr;
-                uint h = hashFunc(fetch);
-                if (log.enabled(log.Trace)) log.trace("output: h[{:x8}] = {:x8}", h, i);
-                hashTable[h].offset[hashCounter[h] & (Pointers - 1)] = i;
-                ++hashCounter[h];
+                } else static if (Compression_Level == 2) {
+                    ubyte temp[4];
+                    outDataIn.seek(i);
+                    outDataIn.read(temp[0 .. 3]);
+                    uint fetch = *cast(uint*)temp.ptr;
+                    uint h = hashFunc(fetch);
+                    if (log.enabled(log.Trace)) log.trace("output: h[{:x8}] = {:x8}", h, i);
+                    hashTable[h].offset[hashCounter[h] & (Pointers - 1)] = i;
+                    ++hashCounter[h];
 
-                if (log.enabled(log.Trace)) log.trace("fetchinup: {:x8}", fetch);
-
+                    if (log.enabled(log.Trace)) log.trace("fetchinup: {:x8}", fetch);
+                }
             }
-        }
-        void updateHashUpto(size_t limit) {
-            if (log.enabled(log.Trace)) log.trace("last hashed +1 {:x8} dst-3 {:x8}", lastHashed + 1, limit);
-            outDataOut.flush;
-            if (!lastHashed) {
-                if (log.enabled(log.Trace)) log.trace("cur: {:x8}", lastHashed);
-                updateHash(0);
-            }
-            while (lastHashed < limit) {
-                ++lastHashed;
-                if (log.enabled(log.Trace)) log.trace("cur: {:x8}", lastHashed);
-                updateHash(lastHashed);
+            void updateHashUpto(size_t limit) {
+                if (log.enabled(log.Trace)) log.trace("last hashed +1 {:x8} dst-3 {:x8}", lastHashed + 1, limit);
+                outDataOut.flush;
+                if (!lastHashed) {
+                    if (log.enabled(log.Trace)) log.trace("cur: {:x8}", lastHashed);
+                    updateHash(0);
+                }
+                while (lastHashed < limit) {
+                    ++lastHashed;
+                    if (log.enabled(log.Trace)) log.trace("cur: {:x8}", lastHashed);
+                    updateHash(lastHashed);
+                }
             }
         }
 
@@ -113,16 +114,15 @@ class QuickLz(int Compression_Level) : IDecompressor
             
             if (stateBit) {
                 if (log.enabled(log.Trace)) log.trace("got bit");
-                uint off2 = void;
+                uint plusek = void;
                 uint matchLen = void;
                 static if (Compression_Level == 1) {
                     inData.read(temp[0 .. 3]);
                     uint fetch = *cast(uint*)temp.ptr;
                     uint hash = (fetch >> 4) & 0xfff;
-                    off2 = hashTable[hash].offset[0];
+                    uint off2 = hashTable[hash].offset[0];
                     if (log.enabled(log.Trace)) log.trace("hash: {:x4}", hash);
 
-                    uint plusek = void;
                     if ((fetch & 0xf) != 0) {
                         matchLen = (fetch & 0xf) + 2;
                         inData.seek(-1, IOStream.Anchor.Current);
@@ -137,10 +137,9 @@ class QuickLz(int Compression_Level) : IDecompressor
                     inData.read(temp[0 .. 3]);
                     uint fetch = *cast(uint*)temp.ptr;
                     uint hash = (fetch >> 5) & 0x7ff;
-                    off2 = hashTable[hash].offset[fetch & 0x3];
+                    uint off2 = hashTable[hash].offset[fetch & 0x3];
                     if (log.enabled(log.Trace)) log.trace("hash: {:x4}", hash);
 
-                    uint plusek = void;
                     if ((fetch & 0x1c) != 0) {
                         matchLen = ((fetch >> 2) & 0x7) + 2;
                         inData.seek(-1, IOStream.Anchor.Current);
@@ -151,11 +150,56 @@ class QuickLz(int Compression_Level) : IDecompressor
                         plusek = 3;
                     }
 
-                    if (log.enabled(log.Trace)) log.trace("+={} match: {:x4}", plusek, matchLen);
+                } else static if (Compression_Level == 3) {
+                    inData.read(temp[0 .. 3]);
+                    uint fetch = *cast(uint*)temp.ptr;
+
+                    uint offset = void;
+                    
+                    // 8 | 2 codebits, 6 off bits, const match
+                    if ((fetch & 0x3) == 0) {
+                        offset = temp[0] >> 2;
+                        matchLen = 3;
+                        inData.seek(-2, IOStream.Anchor.Current);
+                        plusek = 1;
+                        if (log.enabled(log.Info)) log.info("1");
+
+                    // 16 | 2 codebits, 14 off bits, const match
+                    } else if ((fetch & 0x2) == 0) {
+                        offset = cast(ushort)fetch >> 2;
+                        matchLen = 3;
+                        inData.seek(-1, IOStream.Anchor.Current);
+                        plusek = 2;
+                        if (log.enabled(log.Info)) log.info("2a");
+
+                    // 16 | 2 code-bits, 10 off bits, 4 match bits
+                    } else if ((fetch & 0x1) == 0) {
+                        offset = cast(ushort)fetch >> 6;
+                        matchLen = ((fetch >> 2) & 0xf) + 3;
+                        inData.seek(-1, IOStream.Anchor.Current);
+                        plusek = 2;
+                        if (log.enabled(log.Info)) log.info("2a");
+
+                    //  24 | 2 code bits, 17 off bits, 5 match bits
+                    } else if ((fetch & 0x7f) != 3) {
+                        // uint has max value of 0xffffff so this is ok
+                        offset = fetch >> 7;
+                        matchLen = ((fetch >> 2) & 0x1f) + 2;
+                        plusek = 3;
+                        if (log.enabled(log.Info)) log.info("3");
+
+                    // 32 | 7 code bits (0000011), 17 off bits, 8 match bits
+                    } else {
+                        inData.read(temp[3 .. 4]);
+                        fetch = *cast(uint*)temp.ptr;
+                        offset = (fetch >> 15);
+                        matchLen = ((fetch >> 7) & 0xff) + 3;
+                        plusek = 4;
+                        if (log.enabled(log.Info)) log.info("4");
+                    }
                     outDataOut.flush;
 
-                } else {
-                    static assert (0);
+                    uint off2 = outDataOut.seek(0, IOStream.Anchor.Current) - offset;
                 }
 
                 if (log.enabled(log.Trace)) log.trace("+={} match: {:x4}", plusek, matchLen);
@@ -165,10 +209,13 @@ class QuickLz(int Compression_Level) : IDecompressor
                 if (log.enabled(log.Trace)) log.trace("off: {:x4} back {:x8}", off2, off);
 
                 writeBack(outDataIn, outDataOut, off, matchLen);
-
-                updateHashUpto(writtenBytes);
                 writtenBytes += matchLen;
-                lastHashed = writtenBytes - 1; // seems kinda strange...
+
+                static if (Compression_Level == 1 || Compression_Level == 2) {
+                    updateHashUpto(writtenBytes);
+                    lastHashed = writtenBytes - 1; // seems kinda strange...
+
+                }
 
             } else {
                 if (log.enabled(log.Trace)) log.trace("no bit");
@@ -184,8 +231,9 @@ class QuickLz(int Compression_Level) : IDecompressor
                     state >>= bs;
 
                     writtenBytes += bs+1;
-
-                    updateHashUpto(writtenBytes - 3);
+                    static if (Compression_Level == 1 || Compression_Level == 2) {
+                        updateHashUpto(writtenBytes - 3);
+                    }
 
                 } else {
 
