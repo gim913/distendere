@@ -114,7 +114,6 @@ class QuickLz(int Compression_Level) : IDecompressor
             
             if (stateBit) {
                 if (log.enabled(log.Trace)) log.trace("got bit");
-                uint plusek = void;
                 uint matchLen = void;
                 static if (Compression_Level == 1) {
                     inData.read(temp[0 .. 3]);
@@ -126,11 +125,9 @@ class QuickLz(int Compression_Level) : IDecompressor
                     if ((fetch & 0xf) != 0) {
                         matchLen = (fetch & 0xf) + 2;
                         inData.seek(-1, IOStream.Anchor.Current);
-                        plusek = 2;
 
                     } else {
                         matchLen = temp[2];
-                        plusek = 3;
                     }
 
                 } else static if (Compression_Level == 2) {
@@ -143,15 +140,13 @@ class QuickLz(int Compression_Level) : IDecompressor
                     if ((fetch & 0x1c) != 0) {
                         matchLen = ((fetch >> 2) & 0x7) + 2;
                         inData.seek(-1, IOStream.Anchor.Current);
-                        plusek = 2;
 
                     } else {
                         matchLen = temp[2];
-                        plusek = 3;
                     }
 
                 } else static if (Compression_Level == 3) {
-                    inData.read(temp[0 .. 3]);
+                    inData.read(temp[0 .. 2]);
                     uint fetch = *cast(uint*)temp.ptr;
 
                     uint offset = void;
@@ -160,53 +155,56 @@ class QuickLz(int Compression_Level) : IDecompressor
                     if ((fetch & 0x3) == 0) {
                         offset = temp[0] >> 2;
                         matchLen = 3;
-                        inData.seek(-2, IOStream.Anchor.Current);
-                        plusek = 1;
+                        inData.seek(-1, IOStream.Anchor.Current);
                         if (log.enabled(log.Info)) log.info("1");
 
                     // 16 | 2 codebits, 14 off bits, const match
                     } else if ((fetch & 0x2) == 0) {
                         offset = cast(ushort)fetch >> 2;
                         matchLen = 3;
-                        inData.seek(-1, IOStream.Anchor.Current);
-                        plusek = 2;
                         if (log.enabled(log.Info)) log.info("2a");
 
                     // 16 | 2 code-bits, 10 off bits, 4 match bits
                     } else if ((fetch & 0x1) == 0) {
                         offset = cast(ushort)fetch >> 6;
                         matchLen = ((fetch >> 2) & 0xf) + 3;
-                        inData.seek(-1, IOStream.Anchor.Current);
-                        plusek = 2;
                         if (log.enabled(log.Info)) log.info("2a");
 
                     //  24 | 2 code bits, 17 off bits, 5 match bits
                     } else if ((fetch & 0x7f) != 3) {
-                        // uint has max value of 0xffffff so this is ok
+                        inData.read(temp[2 .. 3]);
+                        fetch = *cast(uint*)temp.ptr;
+
+                        // fetch has max value of 0xffffff so this is ok
                         offset = fetch >> 7;
                         matchLen = ((fetch >> 2) & 0x1f) + 2;
-                        plusek = 3;
                         if (log.enabled(log.Info)) log.info("3");
 
                     // 32 | 7 code bits (0000011), 17 off bits, 8 match bits
                     } else {
-                        inData.read(temp[3 .. 4]);
+                        inData.read(temp[2 .. 4]);
                         fetch = *cast(uint*)temp.ptr;
+
                         offset = (fetch >> 15);
                         matchLen = ((fetch >> 7) & 0xff) + 3;
-                        plusek = 4;
                         if (log.enabled(log.Info)) log.info("4");
                     }
                     outDataOut.flush;
 
-                    uint off2 = outDataOut.seek(0, IOStream.Anchor.Current) - offset;
+                    //uint off2 = outDataOut.seek(0, IOStream.Anchor.Current) - offset;
                 }
+                
+                if (log.enabled(log.Trace)) log.trace("match: {:x4}", matchLen);
 
-                if (log.enabled(log.Trace)) log.trace("+={} match: {:x4}", plusek, matchLen);
                 outDataOut.flush;
+                static if (Compression_Level == 1 || Compression_Level == 2) {
+                    long off = outDataOut.seek(0, IOStream.Anchor.Current) - off2;
+                    if (log.enabled(log.Trace)) log.trace("off: {:x4} back {:x8}", off2, off);
 
-                long off = outDataOut.seek(0, IOStream.Anchor.Current) - off2;
-                if (log.enabled(log.Trace)) log.trace("off: {:x4} back {:x8}", off2, off);
+                } else {
+                    long off = offset;
+                    if (log.enabled(log.Trace)) log.trace("off: {:x4} ", off);
+                }
 
                 writeBack(outDataIn, outDataOut, off, matchLen);
                 writtenBytes += matchLen;
@@ -214,7 +212,6 @@ class QuickLz(int Compression_Level) : IDecompressor
                 static if (Compression_Level == 1 || Compression_Level == 2) {
                     updateHashUpto(writtenBytes);
                     lastHashed = writtenBytes - 1; // seems kinda strange...
-
                 }
 
             } else {
