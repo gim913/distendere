@@ -42,7 +42,7 @@ int main(char[][] args)
     briefLz.decompressStream(inFile, file);
     +/
 
-    auto qlz = new QuickLz!(1);
+    auto qlz = new QuickLz!(2);
 
     uint r = 0x7800;
     Stdout.formatln ("{:x}", r).newline;
